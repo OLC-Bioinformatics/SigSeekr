@@ -9,9 +9,9 @@ Revised with speed improvements
 from Bio.Blast.Applications import NcbiblastnCommandline
 from Bio.Blast import NCBIXML
 from threading import Thread
-from Queue import Queue
+from queue import Queue
 from collections import defaultdict
-from cStringIO import StringIO
+from io import StringIO
 from glob import glob
 import subprocess, os, time, sys, shlex, re, threading, json, mmap, errno
 from argparse import ArgumentParser
@@ -202,7 +202,7 @@ class runblast(threading.Thread):
                 # with different cutoff values - if I want to re-analyse a search with a lower cutoff, I won't have to
                 # re-perform the BLAST search each time
                 db = fasta.split(".")[0]
-                blastn = NcbiblastnCommandline(query=genome, db=db, evalue=0.1, outfmt=5)
+                blastn = NcbiblastnCommandline(query=genome, db=db, evalue=0.1, outfmt=5, out=genome + ".csv")
                 # Note that there is no output file specified -  the search results are currently stored in stdout
                 stdout, stderr = blastn()
                 # Search stdout for matches - if the term Hsp appears (the .find function will NOT
@@ -225,7 +225,7 @@ class runblast(threading.Thread):
             parsequeue.join()
             # Error catching?
             if not any(blastpath):
-                print out
+                print(out)
             self.blastqueue.task_done()
 
 
@@ -278,7 +278,7 @@ def organismChooser(path,targetPath, name):
             # Ensure that folder is, in actuality, a folder
             if os.path.isdir(folder):
                 # Print out the folder names and the count
-                print "[%s]: %s" % (count, os.path.split(folder)[1])
+                print("[%s]: %s" % (count, os.path.split(folder)[1]))
                 count += 1
         # Get the user input - the number entered corresponds to the list index
         response = input("Please select an organism: ")
@@ -324,13 +324,13 @@ def blaster(path, cutoff, sequencePath, targetPath, name):
     # and the must have a file extension beginning with ".fa"
     if os.path.isdir(sequencePath):
         strains = glob("%s*.fa*" % sequencePath)
-        print '[%s] GeneSeekr input is path with %s genomes' % (time.strftime("%H:%M:%S"), len(strains))
+        print('[%s] GeneSeekr input is path with %s genomes' % (time.strftime("%H:%M:%S"), len(strains)))
     elif os.path.isfile(sequencePath):
         strains = [sequencePath,]
         singlestrain = os.path.split(sequencePath)[1]
-        print 'GeneSeeker input is a single file \n%s' % singlestrain
+        print('GeneSeeker input is a single file \n%s' % singlestrain)
     else:
-        print "The variable \"--genomes\" is not a folder or file"
+        print("The variable \"--genomes\" is not a folder or file")
         return
     # Create the threads for the BLAST analysis
     for i in range(len(strains)):
@@ -346,8 +346,8 @@ def blaster(path, cutoff, sequencePath, targetPath, name):
     # Quality test genes are optional, so only run the qualityGenes if the folder exists
     if qualityGenes:
         makedbthreads(qualityGenes)
-    print "\n[%s] BLAST database(s) created" % (time.strftime("%H:%M:%S"))
-    print "[%s] Now performing and parsing BLAST database searches" % (time.strftime("%H:%M:%S"))
+    print("\n[%s] BLAST database(s) created" % (time.strftime("%H:%M:%S")))
+    print("[%s] Now performing and parsing BLAST database searches" % (time.strftime("%H:%M:%S")))
     sys.stdout.write('[%s] ' % (time.strftime("%H:%M:%S")))
     # Make blastn threads and retrieve xml file locations
     blastnthreads(queryGenes, strains, "query", cutoff)
@@ -403,8 +403,8 @@ def blaster(path, cutoff, sequencePath, targetPath, name):
     # # Calculate the elapsed time
     end = time.time() - start
     # # Friendly exit statement
-    print "\n[%s] Elapsed time for GeneSeeking is %.2f seconds with %.2f seconds per genome" \
-          % (time.strftime("%H:%M:%S"), end, end/float(len(strains)))
+    print("\n[%s] Elapsed time for GeneSeeking is %.2f seconds with %.2f seconds per genome" \
+          % (time.strftime("%H:%M:%S"), end, end/float(len(strains))))
     return plusdict
 
 # Run the blaster function
