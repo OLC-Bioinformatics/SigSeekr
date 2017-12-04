@@ -5,7 +5,7 @@ import shutil
 
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.sys.path.insert(0, parentdir)
-from SigSeekr import *
+from sigseekr.sigseekr import *
 
 
 def test_replace_by_index():

@@ -14,6 +14,7 @@ from Bio import SeqIO
 from biotools import kmc
 from biotools import bbtools
 from accessoryFunctions.accessoryFunctions import printtime
+from accessoryFunctions.accessoryFunctions import dependency_check
 
 
 class PcrInfo:
@@ -246,7 +247,7 @@ def mask_fasta(input_fasta, output_fasta, bedfile):
         end = x[-2]
         start = x[-3]
         name = ' '.join(x[:-3])
-        if coverage == '0':
+        if int(coverage) < 31:
             if name in to_mask:
                 to_mask[name].append(start + ':' + end)
             else:
@@ -275,7 +276,8 @@ def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threa
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
     # First, need to generate a bam file - align the kmers to a reference fasta genome.
-    bbtools.bbmap(ref_fasta, kmers, os.path.join(tmpdir, 'out.bam'), threads=threads)
+    bbtools.bbmap(ref_fasta, kmers, os.path.join(tmpdir, 'out.bam'), threads=threads, ambig='best',
+                  perfectmode='true')
     # Once the bam file is generated, turn it into a sorted bamfile so that bedtools can work with it.
     cmd = 'samtools sort {bamfile} -o {sorted_bamfile}'.format(bamfile=os.path.join(tmpdir, 'out.bam'),
                                                                sorted_bamfile=os.path.join(tmpdir, 'out_sorted.bam'))
@@ -356,6 +358,22 @@ def main(args):
     # Convert our kmers to FASTA format for usage with other programs.
     kmers_to_fasta(os.path.join(args.output_folder, 'unique_kmers.txt'),
                    os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
+    # If user has specified that they want plasmid sequences removed, do that step now.
+    if args.plasmid_filtering != 'NA':
+        printtime('Filtering out inclusion kmers that map to plasmids...', start)
+        if args.low_memory:
+            bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                 forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                                 reference=args.plasmid_filtering, rskip='6', threads=str(args.threads))
+        else:
+            bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                 forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                                 reference=args.plasmid_filtering, threads=str(args.threads))
+        # Move some sequence naming around.
+        os.rename(os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                  os.path.join(args.output_folder, 'inclusion_with_plasmid.fasta'))
+        os.rename(os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                  os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
     # Now that we have kmers that are unique to inclusion sequence, need to map them back to an inclusion genome, if
     # we have one in FASTA format. This will allow us to find unique regions, instead of just kmers.
     if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
@@ -378,10 +396,17 @@ def main(args):
         kmers_to_fasta(os.path.join(args.output_folder, 'exclusion_kmers.txt'),
                        os.path.join(args.output_folder, 'exclusion_kmers.fasta'))
         # Now use bbduk with small kmer size (k=15) to filter out inclusion kmers that have exclusions that are close.
-        bbtools.bbduk_filter(reference=os.path.join(args.output_folder, 'exclusion_kmers.fasta'),
-                             forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                             forward_out=os.path.join(args.output_folder, 'pcr_kmers.fasta'),
-                             k='19', threads=str(args.threads))
+        # Also have this work with low memory options.
+        if args.low_memory:
+            bbtools.bbduk_filter(reference=os.path.join(args.output_folder, 'exclusion_kmers.fasta'),
+                                 forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                 forward_out=os.path.join(args.output_folder, 'pcr_kmers.fasta'),
+                                 k='19', threads=str(args.threads), rskip=6)
+        else:
+            bbtools.bbduk_filter(reference=os.path.join(args.output_folder, 'exclusion_kmers.fasta'),
+                                 forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                 forward_out=os.path.join(args.output_folder, 'pcr_kmers.fasta'),
+                                 k='19', threads=str(args.threads))
         # Next step: Get distances between potential primers by mapping back to a reference (if it exists) and getting
         # distances.
         if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
@@ -436,7 +461,24 @@ if __name__ == '__main__':
                         default=False,
                         action='store_true',
                         help='If enabled, will not clean up a bunch of (fairly) useless files at the end of a run.')
+    parser.add_argument('-p', '--plasmid_filtering',
+                        type=str,
+                        default='NA',
+                        help='To ensure unique sequences are not plasmid-borne, a FASTA-formatted database can be'
+                             ' provided with this argument. Any unique kmers that are in the plasmid database will'
+                             ' be filtered out.')
+    parser.add_argument('-l', '--low_memory',
+                        default=False,
+                        action='store_true',
+                        help='Activate this flag to cause plasmid filtering to use substantially less RAM (and '
+                             'go faster), at the cost of some sensitivity.')
     args = parser.parse_args()
+    # Check that dependencies are present, warn users if they aren't.
+    dependencies = ['bbmap.sh', 'bbduk.sh', 'kmc', 'bedtools', 'samtools', 'kmc_tools']
+    for dependency in dependencies:
+        if dependency_check(dependency) is False:
+            print('WARNING: Dependency {} not found. SigSeekr may not be able to run!'.format(dependency))
     if not os.path.isdir(args.output_folder):
         os.makedirs(args.output_folder)
     main(args)
+
