@@ -240,7 +240,7 @@ def remove_n(input_fasta, output_fasta):
         with open(output_fasta, 'a+') as outfile:
             i = 1
             for unique in uniques:
-                if unique != '':
+                if unique != '' and len(unique) >= 31:
                     outfile.write('>contig{}_sequence{}\n'.format(str(j), str(i)))
                     unique = textwrap.fill(unique)
                     outfile.write(unique + '\n')
@@ -281,7 +281,7 @@ def mask_fasta(input_fasta, output_fasta, bedfile):
         end = x[-2]
         start = x[-3]
         name = ' '.join(x[:-3])
-        if int(coverage) == 0:
+        if int(coverage) < 31:  # I changed this at some point recently - seems to have made me lose a ton of specificity.
             if name in to_mask:
                 to_mask[name].append(start + ':' + end)
             else:
@@ -450,45 +450,49 @@ def main(args):
             lines = f.readlines()
         if lines:
             printtime('Found kmers unique to inclusion...', start)
-            break
+            # Convert our kmers to FASTA format for usage with other programs.
+            kmers_to_fasta(os.path.join(args.output_folder, 'unique_kmers.txt'),
+                           os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
+            # Now attempt to generate contiguous sequences.
+            if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
+                printtime('Generating contiguous sequences from inclusion kmers...', start)
+                ref_fasta = glob.glob(os.path.join(args.inclusion, '*.f*a'))[0]
+                # Get inclusion kmers into FASTA format.
+                generate_bedfile(ref_fasta, os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                 os.path.join(args.output_folder, 'regions_to_mask.bed'),
+                                 tmpdir=os.path.join(args.output_folder, 'bedtmp'), threads=str(args.threads),
+                                 logfile=log)
+                mask_fasta(ref_fasta, os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
+                           os.path.join(args.output_folder, 'regions_to_mask.bed'))
+                remove_n(os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
+                         os.path.join(args.output_folder, 'sigseekr_result.fasta'))
+                with open(os.path.join(args.output_folder, 'sigseekr_result.fasta')) as f:
+                    lines = f.readlines()
+                if lines:  # If we have file output, that means we have contiguous sequences long enough, so don't iterate
+                    break
+                printtime('Kmers were not able to generate long enough contiguous sequences. Trying again...', start)
         exclusion_cutoff += 1
-    # Convert our kmers to FASTA format for usage with other programs.
-    kmers_to_fasta(os.path.join(args.output_folder, 'unique_kmers.txt'),
-                   os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
+    # TODO: Make plasmid filtering a thing again.
     # If user has specified that they want plasmid sequences removed, do that step now.
-    if args.plasmid_filtering != 'NA':
-        printtime('Filtering out inclusion kmers that map to plasmids...', start)
-        if args.low_memory:
-            out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                                                 forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-                                                 reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
-                                                 returncmd=True)
-            write_to_logfile(log, out, err, cmd)
-        else:
-            out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                                                 forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-                                                 reference=args.plasmid_filtering, threads=str(args.threads),
-                                                 returncmd=True)
-            write_to_logfile(log, out, err, cmd)
-        # Move some sequence naming around.
-        os.rename(os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                  os.path.join(args.output_folder, 'inclusion_with_plasmid.fasta'))
-        os.rename(os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-                  os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
-    # Now that we have kmers that are unique to inclusion sequence, need to map them back to an inclusion genome, if
-    # we have one in FASTA format. This will allow us to find unique regions, instead of just kmers.
-    if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
-        printtime('Generating contiguous sequences from inclusion kmers...', start)
-        ref_fasta = glob.glob(os.path.join(args.inclusion, '*.f*a'))[0]
-        # Get inclusion kmers into FASTA format.
-        generate_bedfile(ref_fasta, os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                         os.path.join(args.output_folder, 'regions_to_mask.bed'),
-                         tmpdir=os.path.join(args.output_folder, 'bedtmp'), threads=str(args.threads),
-                         logfile=log)
-        mask_fasta(ref_fasta, os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
-                   os.path.join(args.output_folder, 'regions_to_mask.bed'))
-        remove_n(os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
-                 os.path.join(args.output_folder, 'sigseekr_result.fasta'))
+    # if args.plasmid_filtering != 'NA':
+    #     printtime('Filtering out inclusion kmers that map to plasmids...', start)
+    #     if args.low_memory:
+    #         out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+    #                                              forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+    #                                              reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
+    #                                              returncmd=True)
+    #         write_to_logfile(log, out, err, cmd)
+    #     else:
+    #         out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+    #                                              forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+    #                                              reference=args.plasmid_filtering, threads=str(args.threads),
+    #                                              returncmd=True)
+    #         write_to_logfile(log, out, err, cmd)
+    #     Move some sequence naming around.
+        # os.rename(os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+        #           os.path.join(args.output_folder, 'inclusion_with_plasmid.fasta'))
+        # os.rename(os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+        #           os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
     # If we want to find PCR primers, try to filter out any inclusion kmers that are close to exclusion kmers.
     if args.pcr:
         printtime('Generating PCR info...', start)
