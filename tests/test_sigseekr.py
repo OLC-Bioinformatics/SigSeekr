@@ -27,6 +27,7 @@ def test_n_removal_long():
     with open('tests/n_result.fasta') as f:
         lines = f.readlines()
     assert lines == ['>contig1_sequence1\n', 'TGCATCGAATATGCATGCAATGCATGCAATGCATGCAGCATGCAAAAAAAAAA\n']
+    os.remove('tests/n_result.fasta')
 
 
 def test_1_fastqs():
@@ -48,7 +49,7 @@ def test_inclusion_fastas():
     kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
-    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	1\n']
+    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	2\n']
     shutil.rmtree('tests/tmp')
 
 
@@ -76,7 +77,7 @@ def test_inclusion_fastqs():
     kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
-    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	2\n']
+    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	4\n']
     shutil.rmtree('tests/tmp')
 
 
@@ -104,7 +105,7 @@ def test_inclusion_both():
     kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
-    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	1\n']
+    assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	6\n']
     shutil.rmtree('tests/tmp')
 
 
@@ -162,16 +163,38 @@ def test_fasta_mask():
     os.remove('tests/fasta_mask/out.fasta')
 
 
-def test_amplicon():
-    find_primer_distances('tests/amplicon_test/kmers.fasta', 'tests/amplicon_test/reference.fasta',
-                          'tests/amplicon_test', min_amplicon_size=100,
-                          inclusion_dir='tests/amplicon_test/inclusion')  # TODO: Add inclusion dir so that this works again
-    with open('tests/amplicon_test/amplicons.csv') as f:
+def test_amplicon_split_amplicon_too_long():
+    split_sequences_into_amplicons(input_sequence_file='tests/fasta_only/sequence1.fasta',
+                                   amplicon_length=200,
+                                   output_amplicon_file='tests/output_amplicon.fasta')
+    with open('tests/output_amplicon.fasta') as f:
         lines = f.readlines()
-    # assert lines == ['Sequence1,Sequence2,Amplicon_Size\n',
-    #                  'AGCTAGTCACTACAGCTACGATAGCTAGCAT,GGCACCATCGACACGACACCACACACGACAG,123\n',
-    #                  'GGCACCATCGACACGACACCACACACGACAG,AGCTAGTCACTACAGCTACGATAGCTAGCAT,123\n']
-    assert 'AGCTAGTCACTACAGCTACGATAGCTAGCAT,GGCACCATCGACACGACACCACACACGACAG,123\n' in lines
-    assert 'GGCACCATCGACACGACACCACACACGACAG,AGCTAGTCACTACAGCTACGATAGCTAGCAT,123\n' in lines
-    assert len(lines) == 3
-    os.remove('tests/amplicon_test/amplicons.csv')
+    assert lines == []
+    os.remove('tests/output_amplicon.fasta')
+
+
+def test_amplicon_split_good():
+    split_sequences_into_amplicons(input_sequence_file='tests/fasta_only/sequence1.fasta',
+                                   amplicon_length=10,
+                                   output_amplicon_file='tests/output_amplicon.fasta')
+    with open('tests/output_amplicon.fasta') as f:
+        lines = f.readlines()
+    assert lines == ['>sequence1\n',
+                     'ATGTAGCATG\n',
+                     '>sequence2\n',
+                     'TACGTACGTA\n',
+                     '>sequence3\n',
+                     'GTCATGGGAT\n']
+    os.remove('tests/output_amplicon.fasta')
+
+
+def test_exclusion_blastdb_make():
+    make_all_exclusion_blast_db(exclusion_folder='tests/fasta_only',
+                                combined_exclusion_fasta='tests/combined_exclusion.fasta')
+    assert os.path.isfile('tests/combined_exclusion.fasta.nhr')
+    assert os.path.isfile('tests/combined_exclusion.fasta.nin')
+    assert os.path.isfile('tests/combined_exclusion.fasta.nsq')
+    os.remove('tests/combined_exclusion.fasta.nhr')
+    os.remove('tests/combined_exclusion.fasta.nin')
+    os.remove('tests/combined_exclusion.fasta.nsq')
+    os.remove('tests/combined_exclusion.fasta')

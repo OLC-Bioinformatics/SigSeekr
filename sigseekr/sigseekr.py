@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from io import StringIO
 import multiprocessing
 import subprocess
 import argparse
@@ -9,10 +10,11 @@ import glob
 import time
 import os
 import re
-import pysam
 from Bio import SeqIO
 from biotools import kmc
 from biotools import bbtools
+from Bio.Blast import NCBIXML
+from Bio.Blast.Applications import NcbiblastnCommandline
 from accessoryFunctions.accessoryFunctions import printtime
 from accessoryFunctions.accessoryFunctions import dependency_check
 
@@ -72,7 +74,7 @@ def find_unpaired_reads(fastq_directory, forward_id='_R1', reverse_id='_R2'):
 
 
 def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse_id='_R2', tmpdir='tmpinclusion',
-                          maxmem='12', threads='2', logfile=None):
+                          maxmem='12', threads='2', logfile=None, k=31):
     """
     Given an folder containing some genomes, finds kmers that are common to all genomes, and writes them to output_db.
     Genomes can be in fasta (uncompressed only? check this) or fastq (gzip compressed or uncompressed) formats.
@@ -85,6 +87,7 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
     :param maxmem: Maximum amount of memory to use when kmerizing, in GB.
     :param threads: Number of threads to use. Counterintuitively, should be a string.
     :param logfile: Text file you want commands used, as well as stdout and stderr from called programs, to be logged to
+    :param k: kmer size to use for kmc kmer generation
     """
     # Make the tmpdir, if it doesn't exist already.
     if not os.path.isdir(tmpdir):
@@ -97,7 +100,8 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
     i = 1
     for fasta in fastas:
         out, err, cmd = kmc.kmc(fasta, os.path.join(tmpdir, 'database{}'.format(str(i))), fm='', m=maxmem, t=threads,
-                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]), returncmd=True)
+                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]), returncmd=True,
+                                k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
@@ -105,7 +109,8 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
         out, err, cmd = kmc.kmc(forward_in=pair[0], reverse_in=pair[1], database_name=os.path.join(tmpdir, 'database{}'.format(str(i))),
                                 min_occurrences=2,  # For fastqs, make min_occurrence two to hopefully filter out sequencing errors.
                                 m=maxmem, t=threads, tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]),
-                                returncmd=True)
+                                returncmd=True,
+                                k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
@@ -113,7 +118,8 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
         out, err, cmd = kmc.kmc(forward_in=fastq, database_name=os.path.join(tmpdir, 'database{}'.format(str(i))),
                                 min_occurrences=2,  # For fastqs, make min_occurrence two to hopefully filter out sequencing errors.
                                 m=maxmem, t=threads, tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]),
-                                returncmd=True)
+                                returncmd=True,
+                                k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
@@ -126,7 +132,7 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
         f.write('OUTPUT:\n{} = '.format(output_db))
         for j in range(i - 1):
             if j < (i - 2):
-                f.write('set{}*'.format(str(j + 1)))
+                f.write('set{}*sum'.format(str(j + 1)))
             else:
                 f.write('set{}\n'.format(str(j + 1)))
     cmd = 'kmc_tools complex {}'.format(os.path.join(tmpdir, 'command_file'))
@@ -141,7 +147,7 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
 
 
 def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse_id='_R2', tmpdir='tmpexclusion',
-                          maxmem='12', threads='2', logfile=None):
+                          maxmem='12', threads='2', logfile=None, k=31):
     """
     Given an folder containing some genomes, finds all kmers that are present in genomes, and writes them to output_db.
     Genomes can be in fasta (uncompressed only? check this) or fastq (gzip compressed or uncompressed) formats.
@@ -154,6 +160,7 @@ def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse
     :param maxmem: Maximum amount of memory to use when kmerizing, in GB.
     :param threads: Number of threads to use. Counterintuitively, should be a string.
     :param logfile: Text file you want commands used, as well as stdout and stderr from called programs, to be logged to
+    :param k: Kmer size to use.
     """
     # Make the tmpdir, if it doesn't exist already.
     if not os.path.isdir(tmpdir):
@@ -166,14 +173,15 @@ def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse
     i = 1
     for fasta in fastas:
         out, err, cmd = kmc.kmc(fasta, os.path.join(tmpdir, 'database{}'.format(str(i))), fm='', m=maxmem,
-                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]), returncmd=True)
+                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]), returncmd=True, k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
     for pair in paired_fastqs:
         out, err, cmd = kmc.kmc(forward_in=pair[0], reverse_in=pair[1], database_name=os.path.join(tmpdir, 'database{}'.format(str(i))),
                                 min_occurrences=2, m=maxmem, t=threads,
-                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]), returncmd=True)
+                                tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]),
+                                returncmd=True, k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
@@ -181,7 +189,8 @@ def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse
         out, err, cmd = kmc.kmc(forward_in=fastq, database_name=os.path.join(tmpdir, 'database{}'.format(str(i))),
                                 min_occurrences=2, m=maxmem, t=threads,
                                 tmpdir=os.path.join(tmpdir, str(time.time()).split('.')[0]),
-                                returncmd=True)
+                                returncmd=True,
+                                k=k)
         if logfile:
             write_to_logfile(logfile, out, err, cmd)
         i += 1
@@ -225,11 +234,12 @@ def kmers_to_fasta(kmer_file, output_fasta):
             i += 1
 
 
-def remove_n(input_fasta, output_fasta):
+def remove_n(input_fasta, output_fasta, k=31):
     """
     Given a fasta-formatted file with stretches of Ns in it, will give a fasta-formatted file as output that has
     the original fasta file split into contigs, with a split on each string of Ns.
     :param input_fasta: Path to input fasta.
+    :param k: kmer size used to find unique kmers. Unique sequence need to be at least this long.
     :param output_fasta: Path to output fasta. Should NOT be the same as input fasta.
     """
     contigs = SeqIO.parse(input_fasta, 'fasta')
@@ -240,7 +250,7 @@ def remove_n(input_fasta, output_fasta):
         with open(output_fasta, 'a+') as outfile:
             i = 1
             for unique in uniques:
-                if unique != '' and len(unique) >= 31:
+                if unique != '' and len(unique) >= k:
                     outfile.write('>contig{}_sequence{}\n'.format(str(j), str(i)))
                     unique = textwrap.fill(unique)
                     outfile.write(unique + '\n')
@@ -263,13 +273,14 @@ def replace_by_index(stretch, seq):
     return seq
 
 
-def mask_fasta(input_fasta, output_fasta, bedfile):
+def mask_fasta(input_fasta, output_fasta, bedfile, k=31):
     """
     Given a bedfile specifying coverage depths, and an input fasta file corresponding to that bedfile, will create
     a new fasta file with 0-coverage regions replace with Ns.
     :param input_fasta: Path to input fasta file.
     :param output_fasta: Path to output fasta file. Should NOT be the same as input fasta file.
     :param bedfile: Bedfile containing coverage depth info.
+    :param k: kmer size used when generating kmers unique to inclusion with kmc.
     """
     to_mask = dict()
     with open(bedfile) as bed:
@@ -281,7 +292,9 @@ def mask_fasta(input_fasta, output_fasta, bedfile):
         end = x[-2]
         start = x[-3]
         name = ' '.join(x[:-3])
-        if int(coverage) < 31:  # I changed this at some point recently - seems to have made me lose a ton of specificity.
+        # This needs to be at least k, otherwise you end up with a stretch of length (k * 2) + 1 which matches
+        # exclusion sequence perfectly, except for a SNV in the middle.
+        if int(coverage) < k:
             if name in to_mask:
                 to_mask[name].append(start + ':' + end)
             else:
@@ -334,90 +347,173 @@ def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threa
     shutil.rmtree(tmpdir)
 
 
-def find_primer_distances(primer_file, reference_file, output_dir, inclusion_dir, tmpdir='primertmp', threads='2', logfile=None,
-                          min_amplicon_size=200, max_amplicon_size=1000):
+def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, amplicon_length=200):
     """
-    Given a FASTA-formatted file with kmers that might be acceptable to use as primers, will create a CSV file that
-    shows the number of base pairs between each set of primers.
-    :param primer_file: Path to FASTA-formatted file containing kmers.
-    :param reference_file: Path to FASTA-formatted reference file.
-    :param output_dir: Directory where output CSV (called amplicons.csv) will be created.
-    :param inclusion_dir: Directory with inclusion genomes.
-    :param tmpdir: Temporary directory to store intermediate files. Deleted upon completion.
-    :param threads: Number of threads to run analysis on. Must be a string.
-    :param logfile: Base filename where stdout and stderr from programs called will go.
-    :param min_amplicon_size: Minimum amplicon size for PCR products.
-    :param max_amplicon_size: Maximum amplicon size for PCR products.
+    Given an input fasta file, will find potential amplicons of amplicon_length. Uses a sliding-windowy approach,
+    so if a contig is 900 bp long and amplicon length is 200, will get 4 amplicons - positions 1-200, 201-400,
+    401-600, and 601-800. Last 100 bp will be ignored. If contig is shorter than amplicon_length, nothing happens.
+    :param input_sequence_file: Path to input file to be split into amplicons, in FASTA format.
+    :param output_amplicon_file: Path to where you'll want output amplicon file to be stored. Will overwrite
+    existing files.
+    :param amplicon_length: Desired amplicon length. Default 200.
     """
-    # TODO: Deal with strandedness so that sequences found can actually be used as primers without
-    # additional manual verification steps.
+    with open(output_amplicon_file, 'w') as f:
+        seq_id = 1
+        for unique_seq in SeqIO.parse(input_sequence_file, 'fasta'):
+            if len(unique_seq) >= amplicon_length:
+                sequence = str(unique_seq.seq)
+                outstr = ''
+                # Split sequence into a bunch of chunks of specified amplicon size, write those chunks to file.
+                i = 0
+                while i < len(sequence):
+                    if len(sequence[i:amplicon_length + i]) == amplicon_length:
+                        outstr += '>sequence' + str(seq_id) + '\n'
+                        outstr += sequence[i:amplicon_length + i] + '\n'
+                        seq_id += 1
+                    i += amplicon_length
+                f.write(outstr)
+
+
+def make_all_exclusion_blast_db(exclusion_folder, combined_exclusion_fasta, logfile=None):
+    """
+    Given a folder (which we assume contains fasta files) and the name of a desired output file, will concatenate the
+    fasta files in the exclusion folder, put them into the combined_exclusion_fasta, and then make a blast database.
+    If a logfile is specified, stdout and stderr from the makeblastdb call will be written to it.
+    :param exclusion_folder: Path to folder containing fasta files to be concatenated.
+    :param combined_exclusion_fasta: Path to desired combined fasta file. Also will be the -db parameter to pass to
+    blastn when the time comes for that.
+    :param logfile: Logfile to write stdout and stderr for makeblastdb call to.
+    """
+    # Get all the files copied together with shutil instead of cat to keep things working cross-platform
+    with open(combined_exclusion_fasta, 'wb') as wfd:
+        for f in glob.glob(os.path.join(exclusion_folder, '*.f*a')):
+            with open(f, 'rb') as fd:
+                shutil.copyfileobj(fd, wfd)
+    # With all the files combined, make a blast database, and get stdout and stderr output to logfile (if specified)
+    cmd = 'makeblastdb -in {combined_fasta} -dbtype nucl'.format(combined_fasta=combined_exclusion_fasta)
+    if logfile:
+        with open(logfile, 'a+') as f:
+            f.write('Command: {}'.format(cmd))
+            subprocess.call(cmd, shell=True, stderr=f, stdout=f)
+    else:
+        subprocess.call(cmd, shell=True)
+
+
+def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, confirmed_amplicons):
+    """
+    Given a blast database of sequences we do not want amplicons to match to and a fasta file containing our
+    potential amplicons, will blastn potential amplicons to make sure that they don't match too closely to the
+    exclusion blastdb. Criteria for this: Top hit length can't be more than 40 base pairs (anything more than
+    that might start getting amplified if we're really unlucky) and if more than one hit, can't have any two hits
+    within 5000bp of each other, as those could also potentially amplify if we're really unlucky.
+    Amplicons confirmed to meet these criteria will get written to confirmed_amplicons, which will overwrite any
+    file that was already there.
+    :param exclusion_blastdb: Path to exclusion blast database. In this pipeline, should have been created by
+    make_all_exclusion_blast_db
+    :param potential_amplicons: Path to potential amplicon fasta file. In this pipeline, should have been created by
+    split_sequences_into_amplicons
+    :param confirmed_amplicons: Path to your desired output confirmed amplicon file. Overwrites file if something
+    was already there.
+    """
+    outstr = ''
+    sequence_id = 1
+    for potential_sequence in SeqIO.parse(potential_amplicons, 'fasta'):
+        blastn = NcbiblastnCommandline(db=exclusion_blastdb,
+                                       task='blastn',
+                                       outfmt=5)
+        stdout, stderr = blastn(stdin=str(potential_sequence.seq))
+        top_hit_length = 999999  # Start this at ridiculouly high value
+
+        # The hit location dict will store the locations of every blast hit to each contig.
+        # Each contig is an entry into the dict, with each entry being a list of locations.
+        # We'll later try every combination in each list to make sure no two matches are too close together.
+        hit_location_dict = dict()
+        records = NCBIXML.parse(StringIO(stdout))
+        for record in records:
+            try:
+                top_hit_length = record.alignments[0].hsps[0].align_length
+            except IndexError:  # Should happen if we don't have any hits at all.
+                top_hit_length = 0
+            for alignment in record.alignments:
+                for hsp in alignment.hsps:
+                    if alignment.title in hit_location_dict:
+                        hit_location_dict[alignment.title].append(hsp.sbjct_start)
+                    else:
+                        hit_location_dict[alignment.title] = [hsp.sbjct_start]
+
+        # Set up a flag that we'll turn to true if we find any sets of matches that are too close together.
+        matches_too_close = False
+        for contig in hit_location_dict:
+            for i in range(len(hit_location_dict[contig])):
+                for j in range(len(hit_location_dict[contig])):
+                    if i != j:
+                        # Make sure no two hits within 5000bp of each other.
+                        if abs(hit_location_dict[contig][i] - hit_location_dict[contig][j]) < 5000:
+                            matches_too_close = True
+        # Allow writing to outstr if either we have no hits longer than a roughly two pcr primers (so 40ish bp)
+        # Also can't have any two matches to the same contig within 5000bp of each other.
+        if top_hit_length < 40 and matches_too_close is False:
+            outstr += '>sequence' + str(sequence_id) + '\n'
+            outstr += str(potential_sequence.seq) + '\n'
+            sequence_id += 1
+    with open(confirmed_amplicons, 'w') as f:
+        f.write(outstr)
+
+
+def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_amplicon_file, confirmed_amplicon_file,
+                                               tmpdir='tmp', logfile=None, amplicon_size=200):
+    """
+    Provided with a directory containing fasta files you want your amplicons to match to and a fasta file where each
+    entry is a potential amplicon, will ensure that each genome contains a full-length match with at least 99 percent
+    identity to each amplicon. Amplicons that do not meet these criteria are filtered out.
+    :param inclusion_fasta_dir: Path to directory containing fastas that you want your amplicons to have matches to.
+    :param potential_amplicon_file: Potential amplicon fasta file. At this point, should be the file created by
+    ensure_amplicons_not_in_exclusion
+    :param confirmed_amplicon_file: Path to file where amplicons confirmed to be in all inclusion genomes will be written.
+    :param tmpdir: Path to directory where blastdbs for each inclusion genome will be created.
+    :param logfile: Logfile for stdout and stderr from the makeblastdb commands.
+    """
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
-    inclusion_genomes = glob.glob(os.path.join(inclusion_dir, '*.f*a'))
-    pcr_info_list = list()
-
-    # Find the set of potential primers for each inclusion genome.
-    # List of primers with locations as part of object for each inclusion strain created, and then each of
-    # those lists put into pcr info list.
-    for inclusion_genome in inclusion_genomes:
-        inclusion_pcr_list = list()
-        base_name = os.path.split(inclusion_genome)[-1].split('.')[0]
-        out, err, cmd = bbtools.bbmap(inclusion_genome,
-                                      forward_in=primer_file,
-                                      out_bam=os.path.join(tmpdir, base_name + '.bam'),
-                                      ambig='best',
-                                      perfectmode='true',
-                                      threads=threads,
-                                      returncmd=True)
+    # Copy each of the inclusion fastas to our temporary folder so we can make them into blast dbs
+    inclusion_fastas = glob.glob(os.path.join(inclusion_fasta_dir, '*.f*a'))
+    for inclusion_fasta in inclusion_fastas:
+        shutil.copy(inclusion_fasta, tmpdir)
+    # Now make a blast DB for each. (And write to logfile, if specified!)
+    inclusion_fastas = glob.glob(os.path.join(tmpdir, '*.f*a'))
+    for inclusion_fasta in inclusion_fastas:
+        cmd = 'makeblastdb -in {inclusion_fasta} -dbtype nucl'.format(inclusion_fasta=inclusion_fasta)
         if logfile:
-            write_to_logfile(logfile, out, err, cmd)
-        bam_handle = pysam.AlignmentFile(os.path.join(tmpdir, base_name + '.bam'), 'rb')
-        for match in bam_handle:
-            ref_name = bam_handle.getrname(match.reference_id)
-            inclusion_pcr_list.append(PcrInfo(match.query_sequence, match.reference_start,
-                                         match.reference_end, ref_name))
-        pcr_info_list.append(inclusion_pcr_list)
-
-    # We now need to keep a count of the number of times that an amplicon is seen, as we want to see the exact same
-    # amplicon in each of our inclusion genomes. Iterate through the primer sets for each inclusion genome,
-    # and use amplicon_count_dict to keep track of the number of times each amplicon is seen.
-    amplicon_count_dict = dict()
-    amplicon_size_dict = dict()
-    for strain in pcr_info_list:
-        for primer_one in strain:
-            for primer_two in strain:
-                # Make sure both primers are on the same contig and aren't identical, then check their sizes.
-                if primer_one.contig_id == primer_two.contig_id and primer_one.seq != primer_two.seq:
-                    if int(primer_one.end_position) > int(primer_two.end_position):
-                        amplicon_size = int(primer_one.end_position) - int(primer_two.start_position)
-                    else:
-                        amplicon_size = int(primer_two.end_position) - int(primer_one.start_position)
-                    if min_amplicon_size < amplicon_size < max_amplicon_size:
-                        outstr = '{primer_one_seq},{primer_two_seq},{amplicon_size}\n'.format(primer_one_seq=primer_one.seq,
-                                                                                              primer_two_seq=primer_two.seq,
-                                                                                              amplicon_size=str(amplicon_size))
-                        primer_pair = primer_one.seq + ',' + primer_two.seq
-                        if primer_pair not in amplicon_size_dict:
-                            amplicon_size_dict[primer_pair] = amplicon_size
-                        # If size checks have passed, create or update the count of number or primers seen.
-                        if outstr not in amplicon_count_dict:
-                            amplicon_count_dict[outstr] = 1
-                        else:  # Allow amplicons to vary by up to 10 base pairs.
-                            if amplicon_size_dict[primer_pair] - 5 <= amplicon_size <= amplicon_size_dict[primer_pair] + 5:
-                                amplicon_count_dict[outstr] += 1
-
-    # This string will get used to write all primer results to file at once so that we can be quick(ish) with file write
-    to_write = ''
-    inclusion_genome_count = len(inclusion_genomes)
-    for amplicon in amplicon_count_dict:
-        # Only want to write if amplicon is seen in each genome
-        if amplicon_count_dict[amplicon] == inclusion_genome_count:
-            to_write += amplicon
-    # Do our file write.
-    with open(os.path.join(output_dir, 'amplicons.csv'), 'w') as f:
-        f.write('Sequence1,Sequence2,Amplicon_Size\n')
-        f.write(to_write)
-    shutil.rmtree(tmpdir, ignore_errors=True)
+            with open(logfile, 'a+') as f:
+                f.write('Command: {}'.format(cmd))
+                subprocess.call(cmd, shell=True, stderr=f, stdout=f)
+        else:
+            subprocess.call(cmd, shell=True)
+    # Finally, BLAST each of our 'confirmed' amplicons against each database, make sure we get a full length match,
+    # which has a percent identity of at least 99 percent in each inclusion genome. If we don't get that, don't
+    # write the sequence.
+    all_fasta_count = 0
+    for potential_sequence in SeqIO.parse(potential_amplicon_file, 'fasta'):
+        in_all_fastas = True  # Assume each sequence is in all fastas. Set to False if necessary
+        for inclusion_fasta in inclusion_fastas:
+            blastn = NcbiblastnCommandline(db=inclusion_fasta,
+                                           outfmt=5)
+            stdout, stderr = blastn(stdin=str(potential_sequence.seq))
+            for record in NCBIXML.parse(StringIO(stdout)):
+                # Attempt to parse top hit info. If, somehow, no hits exist, set our flag to False
+                try:
+                    hit_length = record.alignments[0].hsps[0].align_length
+                    percent_id = float(record.alignments[0].hsps[0].identities)/float(amplicon_size)
+                    if hit_length != amplicon_size or percent_id < 0.99:
+                        in_all_fastas = False
+                except IndexError:
+                    in_all_fastas = False
+        if in_all_fastas:
+            all_fasta_count += 1
+            with open(confirmed_amplicon_file, 'a+') as f:
+                f.write('>sequence{}\n'.format(all_fasta_count))
+                f.write(str(potential_sequence.seq) + '\n')
+    shutil.rmtree(tmpdir)
 
 
 def main(args):
@@ -427,11 +523,11 @@ def main(args):
     printtime('Creating inclusion kmer set...', start)
     make_inclusion_kmerdb(args.inclusion, os.path.join(args.output_folder, 'inclusion_db'),
                           tmpdir=os.path.join(args.output_folder, 'inclusiontmp'), threads=str(args.threads),
-                          logfile=log)
+                          logfile=log, k=args.kmer_size)
     printtime('Creating exclusion kmer set...', start)
     make_exclusion_kmerdb(args.exclusion, os.path.join(args.output_folder, 'exclusion_db'),
                           tmpdir=os.path.join(args.output_folder, 'exclusiontmp'), threads=str(args.threads),
-                          logfile=log)
+                          logfile=log, k=args.kmer_size)
     # Now start trying to subtract kmer sets, see how it goes.
     exclusion_cutoff = 1
     while exclusion_cutoff < 10:
@@ -453,6 +549,28 @@ def main(args):
             # Convert our kmers to FASTA format for usage with other programs.
             kmers_to_fasta(os.path.join(args.output_folder, 'unique_kmers.txt'),
                            os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
+            # Filter out kmers that are plasmid-borne, as necessary.
+            if args.plasmid_filtering != 'NA':
+                printtime('Filtering out inclusion kmers that map to plasmids...', start)
+                if args.low_memory:
+                    out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                                         forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                                                         reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
+                                                         returncmd=True,
+                                                         overwrite='t')
+                    write_to_logfile(log, out, err, cmd)
+                else:
+                    out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                                                         forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                                                         reference=args.plasmid_filtering, threads=str(args.threads),
+                                                         returncmd=True,
+                                                         overwrite='t')
+                    write_to_logfile(log, out, err, cmd)
+                # Move some sequence naming around.
+                os.rename(os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
+                          os.path.join(args.output_folder, 'inclusion_with_plasmid.fasta'))
+                os.rename(os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
+                          os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
             # Now attempt to generate contiguous sequences.
             if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
                 printtime('Generating contiguous sequences from inclusion kmers...', start)
@@ -463,75 +581,52 @@ def main(args):
                                  tmpdir=os.path.join(args.output_folder, 'bedtmp'), threads=str(args.threads),
                                  logfile=log)
                 mask_fasta(ref_fasta, os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
-                           os.path.join(args.output_folder, 'regions_to_mask.bed'))
+                           os.path.join(args.output_folder, 'regions_to_mask.bed'),
+                           k=args.kmer_size)
                 remove_n(os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
-                         os.path.join(args.output_folder, 'sigseekr_result.fasta'))
+                         os.path.join(args.output_folder, 'sigseekr_result.fasta'),
+                         k=args.kmer_size)
                 with open(os.path.join(args.output_folder, 'sigseekr_result.fasta')) as f:
                     lines = f.readlines()
                 if lines:  # If we have file output, that means we have contiguous sequences long enough, so don't iterate
                     break
                 printtime('Kmers were not able to generate long enough contiguous sequences. Trying again...', start)
         exclusion_cutoff += 1
-    # TODO: Make plasmid filtering a thing again.
-    # If user has specified that they want plasmid sequences removed, do that step now.
-    # if args.plasmid_filtering != 'NA':
-    #     printtime('Filtering out inclusion kmers that map to plasmids...', start)
-    #     if args.low_memory:
-    #         out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-    #                                              forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-    #                                              reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
-    #                                              returncmd=True)
-    #         write_to_logfile(log, out, err, cmd)
-    #     else:
-    #         out, err, cmd = bbtools.bbduk_filter(forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-    #                                              forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-    #                                              reference=args.plasmid_filtering, threads=str(args.threads),
-    #                                              returncmd=True)
-    #         write_to_logfile(log, out, err, cmd)
-    #     Move some sequence naming around.
-        # os.rename(os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-        #           os.path.join(args.output_folder, 'inclusion_with_plasmid.fasta'))
-        # os.rename(os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-        #           os.path.join(args.output_folder, 'inclusion_kmers.fasta'))
-    # If we want to find PCR primers, try to filter out any inclusion kmers that are close to exclusion kmers.
+
+    # Try to generate amplicons if desired
     if args.pcr:
         printtime('Generating PCR info...', start)
-        # First step is to create fasta of exclusion kmers.
-        out, err, cmd = kmc.dump(os.path.join(args.output_folder, 'exclusion_db'),
-                                 os.path.join(args.output_folder, 'exclusion_kmers.txt'),
-                                 returncmd=True)
-        write_to_logfile(log, out, err, cmd)
-        kmers_to_fasta(os.path.join(args.output_folder, 'exclusion_kmers.txt'),
-                       os.path.join(args.output_folder, 'exclusion_kmers.fasta'))
-        # Now use bbduk with small kmer size (k=19) to filter out inclusion kmers that have exclusions that are close.
-        # Also have this work with low memory options.
-        if args.low_memory:
-            out, err, cmd = bbtools.bbduk_filter(reference=os.path.join(args.output_folder, 'exclusion_kmers.fasta'),
-                                                 forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                                                 forward_out=os.path.join(args.output_folder, 'pcr_kmers.fasta'),
-                                                 k='19', threads=str(args.threads), rskip=6,
-                                                 returncmd=True)
-            write_to_logfile(log, out, err, cmd)
-        else:
-            out, err, cmd = bbtools.bbduk_filter(reference=os.path.join(args.output_folder, 'exclusion_kmers.fasta'),
-                                                 forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
-                                                 forward_out=os.path.join(args.output_folder, 'pcr_kmers.fasta'),
-                                                 k='19', threads=str(args.threads),
-                                                 returncmd=True)
-            write_to_logfile(log, out, err, cmd)
-        # Next step: Get distances between potential primers by mapping back to a reference (if it exists) and getting
-        # distances.
-        if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
-            ref_fasta = glob.glob(os.path.join(args.inclusion, '*.f*a'))[0]
-            find_primer_distances(os.path.join(args.output_folder, 'pcr_kmers.fasta'), ref_fasta, args.output_folder,
-                                  tmpdir=os.path.join(args.output_folder, 'pcrtmp'), threads=str(args.threads),
-                                  logfile=log,
-                                  min_amplicon_size=args.minimum_amplicon_size,
-                                  max_amplicon_size=args.maximum_amplicon_size,
-                                  inclusion_dir=args.inclusion)
+        # Also, clean up the files that this generates.
+
+        # Step 0: Create Blast DB of all exclusion genomes.
+        make_all_exclusion_blast_db(exclusion_folder=args.exclusion,
+                                    combined_exclusion_fasta=os.path.join(args.output_folder, 'exclusion_combined.fasta'),
+                                    logfile=log)
+        for amp_size in args.amplicon_size:
+            printtime('Finding amplicons of size {}...'.format(amp_size), start)
+            # Step 1: Go through the sigseekr_result.fasta file to find all potential amplicons based on user-specified
+            # amplicon length.
+            split_sequences_into_amplicons(input_sequence_file=os.path.join(args.output_folder, 'sigseekr_result.fasta'),
+                                           output_amplicon_file=os.path.join(args.output_folder, 'potential_pcr_{}.fasta'.format(amp_size)),
+                                           amplicon_length=amp_size)
+            # Step 2: Blast each potential amplicon against Blast DB - keep only those that do not have any matches (for
+            # now - may need to adjust this to keeping some if they have a certain e-value/length/percent id).
+            ensure_amplicons_not_in_exclusion(exclusion_blastdb=os.path.join(args.output_folder, 'exclusion_combined.fasta'),
+                                              potential_amplicons=os.path.join(args.output_folder, 'potential_pcr_{}.fasta'.format(amp_size)),
+                                              confirmed_amplicons=os.path.join(args.output_folder, 'not_in_exclusion_amplicons.fasta'))
+            # Step 3: Make sure potential amplicon is present in all of the inclusion genomes.
+            # To do this: create blast database for each inclusion genome, and then blast each amplicon against
+            # each of the inclusion genomes. Ensure that top hit is a) full length and b) pretty much identical (> 99%?)
+            confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir=args.inclusion,
+                                                       potential_amplicon_file=os.path.join(args.output_folder, 'not_in_exclusion_amplicons.fasta'),
+                                                       confirmed_amplicon_file=os.path.join(args.output_folder, 'confirmed_amplicons_{}.fasta'.format(amp_size)),
+                                                       logfile=log,
+                                                       tmpdir=os.path.join(args.output_folder, 'inclusion_pcr_tmp'),
+                                                       amplicon_size=amp_size)
+
     if not args.keep_tmpfiles:
         printtime('Removing unnecessary output files...', start)
-        to_remove = glob.glob(os.path.join(args.output_folder, 'exclusion*'))
+        to_remove = glob.glob(os.path.join(args.output_folder, '*exclusion*fasta*'))
         to_remove += glob.glob(os.path.join(args.output_folder, 'unique*'))
         to_remove += glob.glob(os.path.join(args.output_folder, '*kmc*'))
         to_remove += glob.glob(os.path.join(args.output_folder, '*.bed'))
@@ -565,6 +660,11 @@ if __name__ == '__main__':
                         required=True,
                         help='Path to folder where you want to store output files. Folder will be created if it '
                              'does not exist.')
+    parser.add_argument('-s', '--kmer_size',
+                        type=int,
+                        default=31,
+                        help='Kmer size used to search for sequences unique to inclusion. Default 31. No idea '
+                             'how changing this affects results. TO BE INVESTIGATED.')
     parser.add_argument('-t', '--threads',
                         type=int,
                         default=num_cpus,
@@ -588,17 +688,15 @@ if __name__ == '__main__':
                         action='store_true',
                         help='Activate this flag to cause plasmid filtering to use substantially less RAM (and '
                              'go faster), at the cost of some sensitivity.')
-    parser.add_argument('-min', '--minimum_amplicon_size',
-                        default=200,
+    parser.add_argument('-a', '--amplicon_size',
+                        nargs='+',
+                        default=[200],
                         type=int,
-                        help='Minimum size for potential amplicons when using the --pcr option. Default is 200.')
-    parser.add_argument('-max', '--maximum_amplicon_size',
-                        default=1000,
-                        type=int,
-                        help='Maximum size for potential amplicons when using the --pcr option. Default is 1000.')
+                        help='Desired size for PCR amplicons. Default 200. If you want to find more than one amplicon'
+                             ' size, enter multiple, separated by spaces.')
     args = parser.parse_args()
     # Check that dependencies are present, warn users if they aren't.
-    dependencies = ['bbmap.sh', 'bbduk.sh', 'kmc', 'bedtools', 'samtools', 'kmc_tools']
+    dependencies = ['bbmap.sh', 'bbduk.sh', 'kmc', 'bedtools', 'samtools', 'kmc_tools', 'blastn', 'makeblastdb']
     for dependency in dependencies:
         if dependency_check(dependency) is False:
             print('WARNING: Dependency {} not found. SigSeekr may not be able to run!'.format(dependency))
