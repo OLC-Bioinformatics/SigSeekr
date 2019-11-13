@@ -10,5 +10,5 @@ setup(
     author="Adam Koziol",
     author_email="adam.koziol@canada.ca",
     url="https://github.com/OLC-Bioinformatics/SigSeekr.git",
-    install_requires=['biopython', 'OLCTools', 'pytest']
+    install_requires=[]
 )
