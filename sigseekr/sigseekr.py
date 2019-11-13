@@ -79,7 +79,7 @@ def find_unpaired_reads(fastq_directory, forward_id='_R1', reverse_id='_R2'):
 
 
 def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse_id='_R2', tmpdir='tmpinclusion',
-                          maxmem='12', threads='2', logfile=None, k=31):
+                          maxmem='12', threads='2', logfile=None, k=31, keep=False):
     """
     Given an folder containing some genomes, finds kmers that are common to all genomes, and writes them to output_db.
     Genomes can be in fasta (uncompressed only? check this) or fastq (gzip compressed or uncompressed) formats.
@@ -93,6 +93,7 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
     :param threads: Number of threads to use. Counter-intuitively, should be a string.
     :param logfile: Text file you want commands used, as well as stdout and stderr from called programs, to be logged to
     :param k: kmer size to use for kmc kmer generation
+    :param keep: Passed argument on whether to keep temporary files
     """
     # Make the tmpdir, if it doesn't exist already.
     if not os.path.isdir(tmpdir):
@@ -152,11 +153,12 @@ def make_inclusion_kmerdb(inclusion_folder, output_db, forward_id='_R1', reverse
     else:
         with open(os.path.join(tmpdir, 'asdf.txt'), 'w') as f:
             subprocess.call(cmd, shell=True, stderr=f, stdout=f)
-    shutil.rmtree(tmpdir)
+    if not keep:
+        shutil.rmtree(tmpdir)
 
 
 def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse_id='_R2', tmpdir='tmpexclusion',
-                          maxmem='12', threads='2', logfile=None, k=31):
+                          maxmem='12', threads='2', logfile=None, k=31, keep=False):
     """
     Given an folder containing some genomes, finds all kmers that are present in genomes, and writes them to output_db.
     Genomes can be in fasta (uncompressed only? check this) or fastq (gzip compressed or uncompressed) formats.
@@ -170,6 +172,7 @@ def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse
     :param threads: Number of threads to use. Counterintuitively, should be a string.
     :param logfile: Text file you want commands used, as well as stdout and stderr from called programs, to be logged to
     :param k: Kmer size to use.
+    :param keep: Passed argument on whether to keep temporary files
     """
     # Make the tmpdir, if it doesn't exist already.
     if not os.path.isdir(tmpdir):
@@ -239,7 +242,8 @@ def make_exclusion_kmerdb(exclusion_folder, output_db, forward_id='_R1', reverse
     else:
         with open(os.path.join(tmpdir, 'asdf.txt'), 'w') as f:
             subprocess.call(cmd, shell=True, stderr=f, stdout=f)
-    shutil.rmtree(tmpdir)
+    if not keep:
+        shutil.rmtree(tmpdir)
 
 
 def kmers_to_fasta(kmer_file, output_fasta):
@@ -335,7 +339,7 @@ def mask_fasta(input_fasta, output_fasta, bedfile, k=31):
                 outfile.write(seq + '\n')
 
 
-def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threads='2', logfile=None):
+def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threads='2', logfile=None, keep=False):
     """
     Given a reference FASTA file and a fasta-formatted set of kmers, will generate a coverage bedfile for the reference
     FASTA by mapping the kmers back to the FASTA.
@@ -345,6 +349,7 @@ def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threa
     :param tmpdir: Temporary directory to store intermediate files. Will be deleted upon method completion.
     :param threads: Number of threads to use for analysis. Must be a string.
     :param logfile: Logfile to write stdout and stderr for makeblastdb call to.
+    :param keep: Passed argument on whether to keep temporary files
     """
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
@@ -370,7 +375,8 @@ def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threa
             subprocess.call(cmd, shell=True, stderr=f, stdout=f)
     else:
         subprocess.call(cmd, shell=True)
-    shutil.rmtree(tmpdir)
+    if not keep:
+        shutil.rmtree(tmpdir)
 
 
 def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, amplicon_length=200):
@@ -487,7 +493,7 @@ def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, co
 
 
 def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_amplicon_file, confirmed_amplicon_file,
-                                               tmpdir='tmp', logfile=None, amplicon_size=200):
+                                               tmpdir='tmp', logfile=None, amplicon_size=200, keep=False):
     """
     Provided with a directory containing fasta files you want your amplicons to match to and a fasta file where each
     entry is a potential amplicon, will ensure that each genome contains a full-length match with at least 99 percent
@@ -500,6 +506,7 @@ def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_am
     :param tmpdir: Path to directory where blastdbs for each inclusion genome will be created.
     :param logfile: Logfile for stdout and stderr from the makeblastdb commands.
     :param amplicon_size: Desired size to use for amplicon creation. Default is 200.
+    :param keep: Passed argument on whether to keep temporary files
     """
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
@@ -541,7 +548,8 @@ def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_am
             with open(confirmed_amplicon_file, 'a+') as f:
                 f.write('>sequence{}\n'.format(all_fasta_count))
                 f.write(str(potential_sequence.seq) + '\n')
-    shutil.rmtree(tmpdir)
+    if not keep:
+        shutil.rmtree(tmpdir)
 
 
 def main(args):
@@ -549,12 +557,18 @@ def main(args):
     # Make the necessary inclusion and exclusion kmer sets.
     logging.info('Creating inclusion kmer set...')
     make_inclusion_kmerdb(args.inclusion, os.path.join(args.output_folder, 'inclusion_db'),
-                          tmpdir=os.path.join(args.output_folder, 'inclusiontmp'), threads=str(args.threads),
-                          logfile=log, k=args.kmer_size)
+                          tmpdir=os.path.join(args.output_folder, 'inclusiontmp'),
+                          threads=str(args.threads),
+                          logfile=log,
+                          k=args.kmer_size,
+                          keep=args.keep_tmpfiles)
     logging.info('Creating exclusion kmer set...')
     make_exclusion_kmerdb(args.exclusion, os.path.join(args.output_folder, 'exclusion_db'),
-                          tmpdir=os.path.join(args.output_folder, 'exclusiontmp'), threads=str(args.threads),
-                          logfile=log, k=args.kmer_size)
+                          tmpdir=os.path.join(args.output_folder, 'exclusiontmp'),
+                          threads=str(args.threads),
+                          logfile=log,
+                          k=args.kmer_size,
+                          keep=args.keep_tmpfiles)
     # Now start trying to subtract kmer sets, see how it goes.
     exclusion_cutoff = 1
     while exclusion_cutoff < 10:
@@ -562,7 +576,8 @@ def main(args):
         out, err, cmd = kmc.subtract(os.path.join(args.output_folder, 'inclusion_db'),
                                      os.path.join(args.output_folder, 'exclusion_db'),
                                      os.path.join(args.output_folder, 'unique_to_inclusion_db'),
-                                     exclude_below=exclusion_cutoff, returncmd=True)
+                                     exclude_below=exclusion_cutoff,
+                                     returncmd=True)
         write_to_logfile(logfile=log, out=out, err=err, cmd=cmd)
         out, err, cmd = kmc.dump(os.path.join(args.output_folder, 'unique_to_inclusion_db'),
                                  os.path.join(args.output_folder, 'unique_kmers.txt'),
@@ -585,7 +600,7 @@ def main(args):
                         forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
                         reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
                         returncmd=True,
-                        overwrite='t')
+                        overwrite='t',)
                     write_to_logfile(logfile=log, out=out, err=err, cmd=cmd)
                 else:
                     out, err, cmd = bbtools.bbduk_filter(
@@ -608,7 +623,8 @@ def main(args):
                 generate_bedfile(ref_fasta, os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
                                  os.path.join(args.output_folder, 'regions_to_mask.bed'),
                                  tmpdir=os.path.join(args.output_folder, 'bedtmp'), threads=str(args.threads),
-                                 logfile=log)
+                                 logfile=log,
+                                 keep=args.keep_tmpfiles)
                 mask_fasta(ref_fasta, os.path.join(args.output_folder, 'inclusion_sequence.fasta'),
                            os.path.join(args.output_folder, 'regions_to_mask.bed'),
                            k=args.kmer_size)
@@ -656,7 +672,8 @@ def main(args):
                                                      .format(amp_size)),
                 logfile=log,
                 tmpdir=os.path.join(args.output_folder, 'inclusion_pcr_tmp'),
-                amplicon_size=amp_size)
+                amplicon_size=amp_size,
+                keep=args.keep_tmpfiles)
 
     if not args.keep_tmpfiles:
         logging.info('Removing unnecessary output files...')
