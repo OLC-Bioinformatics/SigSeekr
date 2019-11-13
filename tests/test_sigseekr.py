@@ -1,9 +1,9 @@
 from genewrappers.biotools import kmc
-import os
 import shutil
+import os
 
-parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-os.sys.path.insert(0, parentdir)
+# parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# os.sys.path.insert(0, parentdir)
 from sigseekr.sigseekr import *
 
 
