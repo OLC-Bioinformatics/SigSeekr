@@ -1,5 +1,4 @@
-from biotools import kmc
-import sys
+from genewrappers.biotools import kmc
 import os
 import shutil
 
