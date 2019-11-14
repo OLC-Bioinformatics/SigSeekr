@@ -118,25 +118,25 @@ Though not tested, SigSeekr should also work on MacOSX. Windows is not supported
 <h1 id="installation-via-conda">Installation via conda</h1>
 <p>The easiest way to get SigSeekr up and running is by installing via conda. It's recommended that you create a conda environment first, and then install.</p>
 <p>If you need to download and install miniconda:</p>
-<pre><code class="bash">  $ wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-  $ bash miniconda.sh -b -p $HOME/miniconda
-  $ export PATH=&quot;$HOME/miniconda/bin:$PATH&quot;
-  $ conda install python=3.6.8
-  $ conda update -q conda
+<pre><code class="bash">$ wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+$ bash miniconda.sh -b -p $HOME/miniconda
+$ export PATH=&quot;$HOME/miniconda/bin:$PATH&quot;
+$ conda install python=3.6.8
+$ conda update -q conda
 </code></pre>
 
 <p>If you need to add the required conda-forge and bioconda channels:</p>
-<pre><code class="bash">  $ conda config --add channels conda-forge
-  $ conda config --add channels bioconda
+<pre><code class="bash">$ conda config --add channels conda-forge
+$ conda config --add channels bioconda
 </code></pre>
 
 <p><strong>Recommended: create a conda environment:</strong></p>
-<pre><code class="bash">  $ conda create -n sigseekr python=3.6.8
-  $ conda activate sigseekr
+<pre><code class="bash">$ conda create -n sigseekr python=3.6.8
+$ conda activate sigseekr
 </code></pre>
 
 <p>Install the SigSeekr package from the olcbioinformatics conda channel</p>
-<pre><code class="bash">  $ conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
+<pre><code class="bash">$ conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
 </code></pre>
 
 <p>This command should install all dependencies, and make the SigSeekr script accessible from your terminal. 
