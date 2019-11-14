@@ -7,42 +7,41 @@ SigSeekr should be able to run on machines with as little as 8GB of RAM, provide
 
 Any number of threads is usable with SigSeekr, with more generally being better.
 
-# Installing External Dependencies
+# Installation via conda
 
-To run SigSeekr, you'll need to install a number of external programs the pipeline uses, and add them to your $PATH.
-The programs SigSeekr needs installed are:
+The easiest way to get SigSeekr up and running is by installing via conda. It's recommended that you create a conda environment first, and then install.
 
-- [BBTools >= 37.23](https://jgi.doe.gov/data-and-tools/bbtools/)
-- [KMC >= 3.0](http://sun.aei.polsl.pl/REFRESH/index.php?page=projects&project=kmc&subpage=download)
-- [Bedtools >= 2.25.0](https://github.com/arq5x/bedtools2/releases/)
-- [Samtools >= 1.6](http://www.htslib.org/download/)
+If you need to download and install miniconda:
 
-Instructions on how to add a program to your $PATH can be found [here](https://stackoverflow.com/questions/14637979/how-to-permanently-set-path-on-linux-unix).
+```bash
+  $ wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+  $ bash miniconda.sh -b -p $HOME/miniconda
+  $ export PATH="$HOME/miniconda/bin:$PATH"
+  $ conda install python=3.6.8
+  $ conda update -q conda
+``` 
 
-# Installation via Pip
+If you need to add the required conda-forge and bioconda channels:
 
-The easiest way to get SigSeekr up and running is by installing via pip. It's recommended that you create a virtual environment first, and then install.
-To create and activate a virtualenv (with python3) something like the following set of commands should work:
+```bash  
+  $ conda config --add channels conda-forge
+  $ conda config --add channels bioconda
+```
 
-- `mkdir SigSeekr`
-- `virtualenv -p /usr/bin/python3 SigSeekr`
-- `source SigSeekr/bin/activate`
+__Recommended: create a conda environment:__
 
-More instructions on virtualenv creation and why virtual environments are wonderful can be found [here](https://realpython.com/blog/python/python-virtual-environments-a-primer/). Once inside the virtual environment, all you should need to do is run pip install:
+```bash
+  $ conda create -n sigseekr python=3.6.8
+  $ conda activate sigseekr
+```
 
-- `pip install sigseekr`
+Install the SigSeekr package from the olcbioinformatics conda channel
 
-This command should install any necessary python package dependencies in your virtual environment, and make the SigSeekr script accessible from your terminal. You should now be able to type `sigseekr.py -h` into your terminal and have the help menu for SigSeekr come up.
+```bash
+  $ conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
+```
 
-# Installation from Source
+This command should install all dependencies, and make the SigSeekr script accessible from your terminal. 
+You should now be able to type `sigseekr.py -h` into your terminal and have the help menu for SigSeekr come up.
 
-You can also download SigSeekr from GitHub. Releases that are not stable may be pushed to GitHub, so be careful. 
-To clone the GitHub repository, type the following:
-
-- `git clone https://github.com/lowandrew/SigSeekr.git`
-
-This should create a folder called `SigSeekr` in your present working directory. You'll need to install any python packages that SigSeekr needs. Within the SigSeekr folder, you should find a file called `requirements.txt`. You can use pip to install all the dependencies that SigSeekr needs with `pip install -r requirements.txt`. If you aren't within a virtual environment, you'll probably need to add a `sudo` before the pip install command.
-
-The `sigseekr.py` script resides in a directory called `sigseekr`. You can either run SigSeekr from inside that directory, or add that directory to your $PATH to have SigSeekr accessible from anywhere.
-
-
+You can now [run](usage.md) SigSeekr.

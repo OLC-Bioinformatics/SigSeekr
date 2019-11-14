@@ -12,5 +12,5 @@ have exact matches to exclusion kmers are then removed, leading to a list of kme
 no kmers unique to inclusion sequences are found the process will be repeated, but this time ignoring exclusion kmers with only one occurrence. (This cycle will continue if no
 unique kmers are found at one occurrence, going to two, then three, etc.)
 
-The kmers found in the above steps will be suitable for bioinformatic purposes, but may not be sufficiently different from exclusion kmers to be used in a PCR reaction. In order 
-to find PCR-appropriate kmers, and additional filtering step can be performed afterwards to only take kmers that are at least 3 SNPs different from any exclusion kmers.
+The kmers found in the above steps will be suitable for bioinformatic purposes, but may not be sufficiently different from exclusion kmers to be used in a PCR reaction.
+Optionally, SigSeekr can attempt to find PCR-able amplicons that are sufficiently different from anything in an exclusion genome.
