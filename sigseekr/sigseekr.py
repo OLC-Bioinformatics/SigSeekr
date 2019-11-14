@@ -9,6 +9,7 @@ import multiprocessing
 import subprocess
 import argparse
 import textwrap
+import primer3
 import logging
 import shutil
 import glob
@@ -552,6 +553,61 @@ def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_am
         shutil.rmtree(tmpdir)
 
 
+def run_primer3(amplicon_files, output_file):
+    """
+    Runs primer3 via the primer3-py python binding (which means that the packaging system gets primer3 installed for us,
+    which is great). Given a list of fasta files that each contain sequence unique to our inclusion genome, will run
+    primer3 on each potential amplicon. Generates a csv file that gives the top 10 (or less if there are fewer) hits
+    for each sequence in each file, and tells the user left and right primers, as well as product size.
+    :param amplicon_files: List of potential amplicon fasta files.
+    :param output_file: Path to output csv file. Will be overwritten if it already exists.
+    """
+    with open(output_file, 'w') as f:
+        f.write('Left_Primer_Sequence,Right_Primer_Sequence,Amplicon_Size\n')
+    for amplicon_file in amplicon_files:
+        for potential in SeqIO.parse(amplicon_file, 'fasta'):
+            # Settings for primer design mostly taken from the defaults on primer3 web implementation found at
+            # http://bioinfo.ut.ee/primer3-0.4.0/
+            # I'm assuming defaults are generally what most people will want - should do some verification of this.
+            primer_info_dict = primer3.bindings.designPrimers({
+                'SEQUENCE_ID': 'test',
+                'SEQUENCE_TEMPLATE': str(potential.seq)
+                },
+                {
+                    'PRIMER_OPT_SIZE': 20,
+                    'PRIMER_PICK_INTERNAL_OLIGO': 0,
+                    'PRIMER_INTERNAL_MAX_SELF_END': 8,
+                    'PRIMER_MIN_SIZE': 18,
+                    'PRIMER_MAX_SIZE': 25,
+                    'PRIMER_OPT_TM': 60.0,
+                    'PRIMER_MIN_TM': 57.0,
+                    'PRIMER_MAX_TM': 63.0,
+                    'PRIMER_MIN_GC': 20.0,
+                    'PRIMER_MAX_GC': 80.0,
+                    'PRIMER_MAX_POLY_X': 100,
+                    'PRIMER_INTERNAL_MAX_POLY_X': 100,
+                    'PRIMER_SALT_MONOVALENT': 50.0,
+                    'PRIMER_DNA_CONC': 50.0,
+                    'PRIMER_MAX_NS_ACCEPTED': 0,
+                    'PRIMER_MAX_SELF_ANY': 12,
+                    'PRIMER_MAX_SELF_END': 8,
+                    'PRIMER_PAIR_MAX_COMPL_ANY': 12,
+                    'PRIMER_PAIR_MAX_COMPL_END': 8
+                })
+            # Now need to parse the giant result dict that primer3 makes, and return up to 10 (I guess? maybe change)
+            # primer pairs per potential amplicon.
+            # Step one of this: Figure out how many primer pairs we got.
+            num_pairs_found = primer_info_dict['PRIMER_PAIR_NUM_RETURNED']
+            if num_pairs_found > 10:  # Don't let there be more than 10 pairs found.
+                num_pairs_found = 10
+            with open(output_file, 'a+') as f:
+                for i in range(num_pairs_found):
+                    product_size = str(primer_info_dict['PRIMER_PAIR_{}_PRODUCT_SIZE'.format(i)])
+                    left_primer_seq = primer_info_dict['PRIMER_LEFT_{}_SEQUENCE'.format(i)]
+                    right_primer_seq = primer_info_dict['PRIMER_RIGHT_{}_SEQUENCE'.format(i)]
+                    f.write('{},{},{}\n'.format(left_primer_seq, right_primer_seq, product_size))
+
+
 def main(args):
     log = os.path.join(args.output_folder, 'sigseekr_log.txt')
     # Make the necessary inclusion and exclusion kmer sets.
@@ -598,7 +654,9 @@ def main(args):
                     out, err, cmd = bbtools.bbduk_filter(
                         forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
                         forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-                        reference=args.plasmid_filtering, rskip='6', threads=str(args.threads),
+                        reference=args.plasmid_filtering,
+                        rskip='6',
+                        threads=str(args.threads),
                         returncmd=True,
                         overwrite='t',)
                     write_to_logfile(logfile=log, out=out, err=err, cmd=cmd)
@@ -606,7 +664,8 @@ def main(args):
                     out, err, cmd = bbtools.bbduk_filter(
                         forward_in=os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
                         forward_out=os.path.join(args.output_folder, 'inclusion_noplasmid.fasta'),
-                        reference=args.plasmid_filtering, threads=str(args.threads),
+                        reference=args.plasmid_filtering,
+                        threads=str(args.threads),
                         returncmd=True,
                         overwrite='t')
                     write_to_logfile(logfile=log, out=out, err=err, cmd=cmd)
@@ -619,7 +678,7 @@ def main(args):
             if len(glob.glob(os.path.join(args.inclusion, '*.f*a'))) > 0:
                 logging.info('Generating contiguous sequences from inclusion kmers...')
                 ref_fasta = glob.glob(os.path.join(args.inclusion, '*.f*a'))[0]
-                # Get inclusion kmers into FASTA format.
+                # Generate the bedfile
                 generate_bedfile(ref_fasta, os.path.join(args.output_folder, 'inclusion_kmers.fasta'),
                                  os.path.join(args.output_folder, 'regions_to_mask.bed'),
                                  tmpdir=os.path.join(args.output_folder, 'bedtmp'), threads=str(args.threads),
@@ -674,6 +733,13 @@ def main(args):
                 tmpdir=os.path.join(args.output_folder, 'inclusion_pcr_tmp'),
                 amplicon_size=amp_size,
                 keep=args.keep_tmpfiles)
+        # Now that we've generated our amplicons, we need to iterate through them and run primer3 on each, then
+        # report back to the user primer pairs, amplicon sizes, and other relevant stats (melting temps, etc)
+        if args.primer3:
+            logging.info('Running Primer3 on potential amplicons...')
+            potential_amplicon_files = glob.glob(os.path.join(args.output_folder, 'confirmed_amplicons_*.fasta'))
+            run_primer3(amplicon_files=potential_amplicon_files,
+                        output_file=os.path.join(args.output_folder, 'amplicons.csv'))
 
     if not args.keep_tmpfiles:
         logging.info('Removing unnecessary output files...')
@@ -738,6 +804,12 @@ if __name__ == '__main__':
                         action='store_true',
                         help='Activate this flag to cause plasmid filtering to use substantially less RAM (and '
                              'go faster), at the cost of some sensitivity.')
+    parser.add_argument('-p3', '--primer3',
+                        default=False,
+                        action='store_true',
+                        help='If enabled, will run primer3 on your potential amplicons and generate a list of primers '
+                             'and the sizes of their products. This output will be found in a file called '
+                             'amplicons.csv in the output directory specified.')
     parser.add_argument('-a', '--amplicon_size',
                         nargs='+',
                         default=[200],
