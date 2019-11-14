@@ -380,7 +380,8 @@ def generate_bedfile(ref_fasta, kmers, output_bedfile, tmpdir='bedgentmp', threa
         shutil.rmtree(tmpdir)
 
 
-def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, amplicon_length=200):
+def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, amplicon_length=200,
+                                   max_potential_amplicons=200):
     """
     Given an input fasta file, will find potential amplicons of amplicon_length. Uses a sliding-windowy approach,
     so if a contig is 900 bp long and amplicon length is 200, will get 4 amplicons - positions 1-200, 201-400,
@@ -389,6 +390,7 @@ def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, am
     :param output_amplicon_file: Path to where you'll want output amplicon file to be stored. Will overwrite
     existing files.
     :param amplicon_length: Desired amplicon length. Default 200.
+    :param max_potential_amplicons: Maxmimum number of amplicons to generate. Default is 200.
     """
     with open(output_amplicon_file, 'w') as f:
         seq_id = 1
@@ -405,6 +407,8 @@ def split_sequences_into_amplicons(input_sequence_file, output_amplicon_file, am
                         seq_id += 1
                     i += amplicon_length
                 f.write(outstr)
+            if seq_id >= max_potential_amplicons:
+                break
 
 
 def make_all_exclusion_blast_db(exclusion_folder, combined_exclusion_fasta, logfile=None):
@@ -432,7 +436,8 @@ def make_all_exclusion_blast_db(exclusion_folder, combined_exclusion_fasta, logf
         subprocess.call(cmd, shell=True)
 
 
-def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, confirmed_amplicons):
+def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, confirmed_amplicons,
+                                      max_potential_amplicons=200):
     """
     Given a blast database of sequences we do not want amplicons to match to and a fasta file containing our
     potential amplicons, will blastn potential amplicons to make sure that they don't match too closely to the
@@ -447,6 +452,7 @@ def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, co
     split_sequences_into_amplicons
     :param confirmed_amplicons: Path to your desired output confirmed amplicon file. Overwrites file if something
     was already there.
+    :param max_potential_amplicons: Maxmimum number of amplicons to generate. Default is 200.
     """
     outstr = ''
     sequence_id = 1
@@ -489,12 +495,15 @@ def ensure_amplicons_not_in_exclusion(exclusion_blastdb, potential_amplicons, co
             outstr += '>sequence' + str(sequence_id) + '\n'
             outstr += str(potential_sequence.seq) + '\n'
             sequence_id += 1
+        if sequence_id > max_potential_amplicons:
+            break
     with open(confirmed_amplicons, 'w') as f:
         f.write(outstr)
 
 
 def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_amplicon_file, confirmed_amplicon_file,
-                                               tmpdir='tmp', logfile=None, amplicon_size=200, keep=False):
+                                               tmpdir='tmp', logfile=None, amplicon_size=200, keep=False,
+                                               max_potential_amplicons=200):
     """
     Provided with a directory containing fasta files you want your amplicons to match to and a fasta file where each
     entry is a potential amplicon, will ensure that each genome contains a full-length match with at least 99 percent
@@ -508,6 +517,7 @@ def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_am
     :param logfile: Logfile for stdout and stderr from the makeblastdb commands.
     :param amplicon_size: Desired size to use for amplicon creation. Default is 200.
     :param keep: Passed argument on whether to keep temporary files
+    :param max_potential_amplicons: Maxmimum number of amplicons to generate. Default is 200.
     """
     if not os.path.isdir(tmpdir):
         os.makedirs(tmpdir)
@@ -549,6 +559,8 @@ def confirm_amplicons_in_all_inclusion_genomes(inclusion_fasta_dir, potential_am
             with open(confirmed_amplicon_file, 'a+') as f:
                 f.write('>sequence{}\n'.format(all_fasta_count))
                 f.write(str(potential_sequence.seq) + '\n')
+        if all_fasta_count >= max_potential_amplicons:
+            break
     if not keep:
         shutil.rmtree(tmpdir)
 
@@ -714,13 +726,15 @@ def main(args):
             split_sequences_into_amplicons(
                 input_sequence_file=os.path.join(args.output_folder, 'sigseekr_result.fasta'),
                 output_amplicon_file=os.path.join(args.output_folder, 'potential_pcr_{}.fasta'.format(amp_size)),
-                amplicon_length=amp_size)
+                amplicon_length=amp_size,
+                max_potential_amplicons=args.max_potential_amplicons)
             # Step 2: Blast each potential amplicon against Blast DB - keep only those that do not have any matches (for
             # now - may need to adjust this to keeping some if they have a certain e-value/length/percent id).
             ensure_amplicons_not_in_exclusion(
                 exclusion_blastdb=os.path.join(args.output_folder, 'exclusion_combined.fasta'),
                 potential_amplicons=os.path.join(args.output_folder, 'potential_pcr_{}.fasta'.format(amp_size)),
-                confirmed_amplicons=os.path.join(args.output_folder, 'not_in_exclusion_amplicons.fasta'))
+                confirmed_amplicons=os.path.join(args.output_folder, 'not_in_exclusion_amplicons.fasta'),
+                max_potential_amplicons=args.max_potential_amplicons)
             # Step 3: Make sure potential amplicon is present in all of the inclusion genomes.
             # To do this: create blast database for each inclusion genome, and then blast each amplicon against
             # each of the inclusion genomes. Ensure that top hit is a) full length and b) pretty much identical (> 99%?)
@@ -732,7 +746,8 @@ def main(args):
                 logfile=log,
                 tmpdir=os.path.join(args.output_folder, 'inclusion_pcr_tmp'),
                 amplicon_size=amp_size,
-                keep=args.keep_tmpfiles)
+                keep=args.keep_tmpfiles,
+                max_potential_amplicons=args.max_potential_amplicons)
         # Now that we've generated our amplicons, we need to iterate through them and run primer3 on each, then
         # report back to the user primer pairs, amplicon sizes, and other relevant stats (melting temps, etc)
         if args.primer3:
@@ -816,6 +831,11 @@ if __name__ == '__main__':
                         type=int,
                         help='Desired size for PCR amplicons. Default 200. If you want to find more than one amplicon'
                              ' size, enter multiple, separated by spaces.')
+    parser.add_argument('-m', '--max_potential_amplicons',
+                        type=int,
+                        default=200,
+                        help='If inclusion sequences are very different from exclusion sequences, amplicon generation '
+                             'can take forever. Set the number of potential amplicons with this option (default 200)')
     arguments = parser.parse_args()
     SetupLogging()
     # Check that dependencies are present, warn users if they aren't.
