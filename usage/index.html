@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        <link rel="canonical" href="https://lowandrew.github.io/SigSeekr/usage/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+
+	<title>Usage - SigSeekr</title>
+
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome-4.0.3.css" rel="stylesheet">
+        <link rel="stylesheet" href="../css/highlight.css">
+        <link href="../css/base.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+        
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="..">SigSeekr</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            <!-- Main navigation -->
+            <ul class="nav navbar-nav">
+            
+            
+                <li >
+                    <a href="..">Home</a>
+                </li>
+            
+            
+            
+                <li >
+                    <a href="../installation/">Installation</a>
+                </li>
+            
+            
+            
+                <li class="active">
+                    <a href="./">Usage</a>
+                </li>
+            
+            
+            </ul>
+
+            <!-- Search, Navigation and Repo links -->
+            <ul class="nav navbar-nav navbar-right">
+                <li >
+                    <a rel="next" href="../installation/">
+                        <i class="fa fa-arrow-left"></i> Previous
+                    </a>
+                </li>
+                <li class="disabled">
+                    <a rel="prev" >
+                        Next <i class="fa fa-arrow-right"></i>
+                    </a>
+                </li>
+                
+                <li>
+                    <a href="https://github.com/lowandrew/SigSeekr">
+                        
+                            <i class="fa fa-github"></i>
+                        
+                        GitHub
+                    </a>
+                </li>
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+        <div class="container">
+            <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="main active"><a href="#quickstart">Quickstart</a></li>
+        
+            <li><a href="#detailed-usage">Detailed Usage</a></li>
+        
+    
+    </ul>
+</div></div>
+            <div class="col-md-9" role="main">
+
+<h1 id="quickstart">Quickstart</h1>
+<p>If you want to run SigSeekr right away upon <a href="../installation/">installing</a> it, you can do so with a toy dataset.</p>
+<p>This dataset is hosted on figshare - to get it, run the following command:</p>
+<ul>
+<li><code>wget https://ndownloader.figshare.com/files/9885379 &amp;&amp; tar xf 9885379</code></li>
+</ul>
+<p>You should now have a folder called <code>example-data</code> in your present working directory. To run SigSeekr, enter the following command:</p>
+<ul>
+<li><code>sigseekr.py -i example-data/inclusion/ -e example-data/exclusion/ -o sigseekr_output -pcr -p3</code> </li>
+</ul>
+<p>The directory specified with the <code>-o</code> flag can be anything - it's the name of a directory where the output files will be created.
+Upon entering the command, you should see output that is something like this:</p>
+<pre><code class="bash">2019-11-14 10:59:09 Creating inclusion kmer set...
+2019-11-14 10:59:25 Creating exclusion kmer set...
+2019-11-14 10:59:52 Subtracting exclusion kmers from inclusion kmers with cutoff 1...
+2019-11-14 10:59:54 Found kmers unique to inclusion...
+2019-11-14 10:59:57 Generating contiguous sequences from inclusion kmers...
+2019-11-14 11:00:41 Generating PCR info...
+2019-11-14 11:00:43 Finding amplicons of size 200...
+2019-11-14 11:01:26 Running Primer3 on potential amplicons...
+2019-11-14 11:01:31 SigSeekr run complete!
+
+</code></pre>
+
+<p>The <code>sigseekr_output</code> folder should have five files in it: </p>
+<ul>
+<li><code>amplicons.csv</code> : list of primers predicted by primer3 and the sizes of their products</li>
+<li><code>inclusion_kmers.fasta</code>: lists all the kmers that are unique to the inclusion set</li>
+<li><code>sigseekr_log.txt</code>: logfile of captured STDOUT and STDERR strings </li>
+<li><code>confirmed_amplicons_200.fasta</code>: FASTA-formatted file of amplicons present in all inclusion genomes (200 refers to 
+the amplicon size specified in the arguments. Default is 200, if multiple sizes are desired, multiple versions of
+this file will be created.)</li>
+<li><code>potential_pcr_200.fasta</code>: all potential amplicons based on user-specified amplicon length. This file will be further 
+refined by the filtering of amplicon sequences present in the exclusion genomes</li>
+<li><code>sigseekr_result.fasta</code>: regions that unique kmers span</li>
+</ul>
+<p>The <code>sigseekr_result.fasta</code> created by running SigSeekr on this toy dataset will have one unique region. </p>
+<pre><code class="bash">&gt;contig1_sequence1
+AACAGGCGACAGGCAGCATCACTAGCTACTA
+</code></pre>
+
+<h3 id="detailed-usage">Detailed Usage</h3>
+<p>Detailed usage options can be found by typing <code>sigseekr.py --help</code>, which will give the following output. 
+Further details on each option can be found below.</p>
+<pre><code>usage: sigseekr.py [-h] -i INCLUSION -e EXCLUSION -o OUTPUT_FOLDER
+                   [-s KMER_SIZE] [-t THREADS] [-pcr] [-k]
+                   [-p PLASMID_FILTERING] [-l] [-p3]
+                   [-a AMPLICON_SIZE [AMPLICON_SIZE ...]]
+                   [-m MAX_POTENTIAL_AMPLICONS]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i INCLUSION, --inclusion INCLUSION
+                        Path to folder containing genome(s) you want signature sequences for. Genomes can be in FASTA 
+                        or FASTQ format. FASTA-formatted files should be uncompressed, FASTQ-formatted files can be 
+                        gzip-compressed or uncompressed.
+  -e EXCLUSION, --exclusion EXCLUSION
+                        Path to folder containing exclusion genome(s) - those you do not want signature sequences for. 
+                        Genomes can be in FASTA or FASTQ format. FASTA-formatted files should be uncompressed, 
+                        FASTQ-formatted files can be gzip-compressed or uncompressed.
+  -o OUTPUT_FOLDER, --output_folder OUTPUT_FOLDER
+                        Path to folder where you want to store output files. Folder will be created if it does not 
+                        exist.
+  -s KMER_SIZE, --kmer_size KMER_SIZE
+                        Kmer size used to search for sequences unique to inclusion. Default 31. 
+                        No idea how changing this affects results. TO BE INVESTIGATED.
+  -t THREADS, --threads THREADS
+                        Number of threads to run analysis on. Defaults to number of cores on your machine.
+  -pcr, --pcr           Enable to filter out inclusion kmers that have close relatives in exclusion kmers.
+  -k, --keep_tmpfiles   If enabled, will not clean up a bunch of (fairly) useless files at the end of a run.
+  -p PLASMID_FILTERING, --plasmid_filtering PLASMID_FILTERING
+                        To ensure unique sequences are not plasmid-borne, a FASTA-formatted database can be provided 
+                        with this argument. Any unique kmers that are in the plasmid database will be filtered out.
+  -l, --low_memory      Activate this flag to cause plasmid filtering to use substantially less RAM (and go faster), 
+                        at the cost of some sensitivity.
+  -p3, --primer3        If enabled, will run primer3 on your potential amplicons and generate a list of primers and the 
+                        sizes of their products. This output will be found in a file called amplicons.csv in the output 
+                        directory specified.
+  -a AMPLICON_SIZE [AMPLICON_SIZE ...], --amplicon_size AMPLICON_SIZE [AMPLICON_SIZE ...]
+                        Desired size for PCR amplicons. Default 200. If you want to find more than one amplicon size, 
+                        enter multiple, separated by spaces.
+  -m MAX_POTENTIAL_AMPLICONS, --max_potential_amplicons MAX_POTENTIAL_AMPLICONS
+                        If inclusion sequences are very different from exclusion sequences, amplicon generation can take 
+                        forever. Set the number of potential amplicons with this option (default 200)
+
+</code></pre></div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            
+            <center>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</center>
+        </footer>
+
+        <script src="../js/jquery-1.10.2.min.js"></script>
+        <script src="../js/bootstrap-3.0.3.min.js"></script>
+        <script src="../js/highlight.pack.js"></script>
+        <script src="../js/base.js"></script>
+    </body>
+</html>
