@@ -14,31 +14,31 @@ The easiest way to get SigSeekr up and running is by installing via conda. It's 
 If you need to download and install miniconda:
 
 ```bash
-  $ wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-  $ bash miniconda.sh -b -p $HOME/miniconda
-  $ export PATH="$HOME/miniconda/bin:$PATH"
-  $ conda install python=3.6.8
-  $ conda update -q conda
+$ wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+$ bash miniconda.sh -b -p $HOME/miniconda
+$ export PATH="$HOME/miniconda/bin:$PATH"
+$ conda install python=3.6.8
+$ conda update -q conda
 ``` 
 
 If you need to add the required conda-forge and bioconda channels:
 
 ```bash  
-  $ conda config --add channels conda-forge
-  $ conda config --add channels bioconda
+$ conda config --add channels conda-forge
+$ conda config --add channels bioconda
 ```
 
 __Recommended: create a conda environment:__
 
 ```bash
-  $ conda create -n sigseekr python=3.6.8
-  $ conda activate sigseekr
+$ conda create -n sigseekr python=3.6.8
+$ conda activate sigseekr
 ```
 
 Install the SigSeekr package from the olcbioinformatics conda channel
 
 ```bash
-  $ conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
+$ conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
 ```
 
 This command should install all dependencies, and make the SigSeekr script accessible from your terminal. 
