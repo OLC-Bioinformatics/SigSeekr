@@ -11,7 +11,7 @@ before_install:
   - conda update -q conda
   - conda config --add channels conda-forge
   - conda config --add channels bioconda
-  - conda install -y -c olcbioinformatics sigseekr=0.2.3=py_0
+  - conda install -y -c olcbioinformatics sigseekr=0.2.4=py_0
 
 script:
   - pytest -s -vv
