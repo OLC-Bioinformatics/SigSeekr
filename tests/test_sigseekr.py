@@ -44,8 +44,8 @@ def test_unpaired_fastqs():
 def test_inclusion_fastas():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_inclusion_kmerdb('tests/fasta_only', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fasta_only', 'tests/tmp/inc_testdb', 'tests/tmp/inclusiontmp', 'inclusion', maxmem='1')
+    kmc.dump('tests/tmp/inc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	2\n']
@@ -55,8 +55,8 @@ def test_inclusion_fastas():
 def test_exclusion_fastas():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_exclusion_kmerdb('tests/fasta_only', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fasta_only', 'tests/tmp/exc_testdb', 'tests/tmp/exclusiontmp', 'exclusion', maxmem='1')
+    kmc.dump('tests/tmp/exc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	2\n',
@@ -72,8 +72,8 @@ def test_exclusion_fastas():
 def test_inclusion_fastqs():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_inclusion_kmerdb('tests/fastq_only', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fastq_only', 'tests/tmp/inc_testdb', 'tests/tmp/inclusiontmp', 'inclusion', maxmem='1')
+    kmc.dump('tests/tmp/inc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	4\n']
@@ -83,8 +83,8 @@ def test_inclusion_fastqs():
 def test_exclusion_fastqs():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_exclusion_kmerdb('tests/fastq_only', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fastq_only', 'tests/tmp/exc_testdb', 'tests/tmp/exclusiontmp', 'exclusion', maxmem='1')
+    kmc.dump('tests/tmp/exc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['AAATATCCCATGACTACGTACGTACATGCTA	2\n',
@@ -100,8 +100,8 @@ def test_exclusion_fastqs():
 def test_inclusion_both():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_inclusion_kmerdb('tests/fasta_and_fastq', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fasta_and_fastq', 'tests/tmp/inc_testdb', 'tests/tmp/inclusiontmp', 'inclusion', maxmem='1')
+    kmc.dump('tests/tmp/inc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['ATGTAGCATGTACGTACGTAGTCATGGGATA	6\n']
@@ -111,8 +111,8 @@ def test_inclusion_both():
 def test_exclusion_both():
     if not os.path.isdir('tests/tmp'):
         os.makedirs('tests/tmp')
-    make_exclusion_kmerdb('tests/fasta_and_fastq', 'tests/tmp/testdb', maxmem='1')
-    kmc.dump('tests/tmp/testdb', 'tests/tmp/kmers')
+    make_kmerdb('tests/fasta_and_fastq', 'tests/tmp/exc_testdb', 'tests/tmp/exclusiontmp', 'exclusion', maxmem='1')
+    kmc.dump('tests/tmp/exc_testdb', 'tests/tmp/kmers')
     with open('tests/tmp/kmers') as f:
         lines = f.readlines()
     assert lines == ['AAATATCCCATGACTACGTACGTACATGCTA	2\n',

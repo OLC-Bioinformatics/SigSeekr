@@ -79,7 +79,7 @@ def find_unpaired_reads(fastq_directory, forward_id='_R1', reverse_id='_R2'):
     return unpaired_list
 
 
-def make_kmerdb(folder, output_db, tmpdir, forward_id='_R1', reverse_id='_R2',
+def make_kmerdb(folder, output_db, tmpdir, analysis, forward_id='_R1', reverse_id='_R2',
                 maxmem='12', threads='2', logfile=None, k=31, keep=False):
     """
     Given an folder containing some genomes, finds all kmers that are present in genomes, and writes them to output_db.
@@ -88,6 +88,8 @@ def make_kmerdb(folder, output_db, tmpdir, forward_id='_R1', reverse_id='_R2',
     :param folder: Path to folder containing your genomes.
     :param output_db: Base name for the kmc database that will be created.
     :param tmpdir: Directory where temporary databases and whatnot will be stored. Deleted upon method completion.
+    :param analysis: type STR: Options are 'inclusion' or 'exclusion'. For an inclusion database, an intersection of
+    kmers is calculated, while a union of all kmers is created for the exlusion database
     :param forward_id: Forward read identifier.
     :param reverse_id: Reverse read identifier.
     :param maxmem: Maximum amount of memory to use when kmerizing, in GB.
@@ -163,7 +165,10 @@ def make_kmerdb(folder, output_db, tmpdir, forward_id='_R1', reverse_id='_R2',
         f.write('OUTPUT:\n{} = '.format(output_db))
         for j in range(i - 1):
             if j < (i - 2):
-                f.write('set{}+'.format(str(j + 1)))
+                if analysis == 'inclusion':
+                    f.write('set{}*sum'.format(str(j + 1)))
+                else:
+                    f.write('set{}+'.format(str(j + 1)))
             else:
                 f.write('set{}\n'.format(str(j + 1)))
     cmd = 'kmc_tools complex {}'.format(os.path.join(tmpdir, 'command_file'))
@@ -571,7 +576,6 @@ def run_primer3(amplicon_files, output_file):
                                                        primer_name=left_primer_name,
                                                        primer_info_dict=primer_info_dict,
                                                        seq_name=potential.id)
-
                 # RIGHT PRIMER
                 right_primer_name = 'PRIMER_RIGHT_{num}'.format(num=i)
                 detailed_body = populate_detailed_body(body_string=detailed_body,
@@ -669,16 +673,20 @@ def main(args):
     log = os.path.join(args.output_folder, 'sigseekr_log.txt')
     # Make the necessary inclusion and exclusion kmer sets.
     logging.info('Creating inclusion kmer set...')
-    make_kmerdb(args.inclusion, os.path.join(args.output_folder, 'inclusion_db'),
+    make_kmerdb(folder=args.inclusion,
+                output_db=os.path.join(args.output_folder, 'inclusion_db'),
                 tmpdir=os.path.join(args.output_folder, 'inclusiontmp'),
+                analysis='inclusion',
                 threads=str(args.threads),
                 maxmem=str(args.max_memory),
                 logfile=log,
                 k=args.kmer_size,
                 keep=args.keep_tmpfiles)
     logging.info('Creating exclusion kmer set...')
-    make_kmerdb(args.exclusion, os.path.join(args.output_folder, 'exclusion_db'),
+    make_kmerdb(folder=args.exclusion,
+                output_db=os.path.join(args.output_folder, 'exclusion_db'),
                 tmpdir=os.path.join(args.output_folder, 'exclusiontmp'),
+                analysis='exclusion',
                 threads=str(args.threads),
                 maxmem=str(args.max_memory),
                 logfile=log,
